@@ -1,0 +1,216 @@
+%% LaTeX2e class for seminar theses
+%% sections/content.tex
+%% 
+%% Karlsruhe Institute of Technology
+%% Institute for Program Structures and Data Organization
+%% Chair for Software Design and Quality (SDQ)
+%%
+%% Dr.-Ing. Erik Burger
+%% burger@kit.edu
+
+\section{Problemstellung} 
+Die Vision des Projekts war es, eine Umgebung für die kontinuierliche Performability-Analyse zu schaffen. Dabei werden die Traces und Metriken nicht durch ein Überwachungssystem bereitgestellt, sondern vom Nutzer als Teil des Repositories hochgeladen. Sobald der Nutzer neue Traces in das Repository pusht, wird der CI/CD-Prozess automatisch angestoßen. Die Pipeline übernimmt dann die Generierung und Simulation der Performability-Modelle basierend auf diesen neuen Daten. Die Ergebnisse der Analysen werden zentral im Repository gespeichert und stehen somit für weitere Auswertungen und Optimierungen zur Verfügung.
+
+
+\section{Lösungsansatz}
+Von Beginn an stand für mich fest, dass NixOS als Betriebssystem für die Replikation des FZI-Setups zum Einsatz kommen würde. NixOS bietet eine einfache und flexible Konfigurationsmöglichkeit, die es mir ermöglichte, die verschiedenen benötigten Komponenten, wie Docker und GitLab, schnell und effizient einzurichten. Die Entscheidung für NixOS erleichterte es mir, eine stabile und reproduzierbare Umgebung zu schaffen, in der alle Komponenten nahtlos zusammenarbeiten.
+
+Durch meinen Betreuer erfuhr ich, dass das FZI statt der GitLab-Container-Registry die standardmäßige Docker-Registry verwendet, welche ich deshalb ebenso aufsetzte.
+
+Um eine klare Trennung der einzelnen Dienste zu gewährleisten, machte ich die verschiedenen Komponenten über unterschiedliche Subdomains meines Servers zugänglich, z. B. \texttt{git.domain.com} für GitLab und \texttt{registry.domain.com} für die Docker-Registry.
+
+Da sowohl Palladio als auch PMX, die beiden Hauptanwendungen für die Performability-Analyse, verwendet wurden, sollten beide Anwendungen in Docker-Containern betrieben werden. Die zugehörigen Dockerfiles wurden von meinem Betreuer Sebastian Weber für PMX bereitgestellt und von Thomas Weber für Palladio basierend auf seinem GitHub Repository adaptiert \cite{thomas}.
+
+Die GitLab CI/CD-Pipeline wurde so konzipiert, dass sie in drei Stages unterteilt ist, wobei jede Stage ein eigenes Docker-Image verwendet. Diese Entkopplung der einzelnen Pipeline-Schritte ermöglicht eine einfache Wartung und Flexibilität bei zukünftigen Anpassungen.
+
+Der Nutzer muss lediglich die Traces, die er für die Analyse und Simulation nutzen möchte, als Teil seines Repositorys bereitstellen. Sobald diese Traces in das Repository gepusht werden, wird die Pipeline automatisch angestoßen, und die Analyse sowie Simulation können erfolgen.
+
+
+\section{Verwendete Komponenten}
+\subsection{Applikationssoftware}
+Die für die Analyse und Simulation eingesetzten Programme sind PMX und Palladio. PMX generiert aus Traces ein Performance Model, das von Palladio für Simulationen genutzt wird. Im Rahmen des Praktikums und für die CI/CD-Pipeline wurden beide Anwendungen als Blackbox betrachtet.
+
+\subsection{NixOS} 
+Für die Serverumgebung habe ich mich für NixOS entschieden, da dieses Betriebssystem durch sein einzigartiges Paketverwaltungssystem eine präzise und reproduzierbare Konfiguration ermöglicht. NixOS erlaubt es, sämtliche Komponenten, wie Docker und GitLab, sauber in einer deklarativen Form zu verwalten und aufzusetzen, was den gesamten Prozess der Servereinrichtung erheblich vereinfacht hat.
+
+In meiner \texttt{configuration.nix}-Datei habe ich die gesamte Umgebung definiert, einschließlich der Einrichtung von GitLab, GitLab Runner und der Docker-Registry. 
+
+\subsection{Gitlab} 
+Um GitLab auf meinem Server zu betreiben, habe ich die Konfiguration über NixOS vorgenommen. Der folgende Abschnitt aus meiner configuration.nix beschreibt die GitLab-Konfiguration:
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{nix}
+gitlab = {
+  enable = true;
+  databasePasswordFile = "/var/keys/gitlab/db_password";
+  initialRootPasswordFile = "/var/keys/gitlab/root_password";
+  https = true;
+  host = "git.dumustbereitsein.de";
+  port = 443;
+  user = "git";
+  databaseUsername = "git";
+  group = "git";
+  smtp = {
+    enable = true;
+    address = "localhost";
+    port = 25;
+  };
+  secrets = {
+    dbFile = "/var/keys/gitlab/db";
+    secretFile = "/var/keys/gitlab/secret";
+    otpFile = "/var/keys/gitlab/otp";
+    jwsFile = "/var/keys/gitlab/jws";
+  };
+  extraConfig = {
+    gitlab = {
+      email_from = "gitlab-no-reply@dumustbereitsein.de";
+      email_display_name = "Vincenzos GitLab";
+      email_reply_to = "gitlab-no-reply@dumustbereitsein.de";
+    };
+  };
+};
+\end{minted}
+
+In dieser Konfiguration habe ich GitLab so eingerichtet, dass es über die Subdomain git.dumustbereitsein.de per HTTPS erreichbar ist. Es wird eine lokale SMTP-Konfiguration verwendet, um Benachrichtigungen zu versenden, und die Zugangsdaten für die Datenbank sowie weitere sicherheitsrelevante Informationen werden in separaten Dateien gespeichert. HTTPS is notwendig, damit die Container-Registry mit GitLab kommunizieren kann. Die Secrets sind notwendig um GitLab überhaupt zu betreiben. 
+
+
+\subsection{GitLab Runner}
+Der GitLab Runner spielt eine zentrale Rolle in der CI/CD-Pipeline. Er führt die einzelnen Jobs aus, die in den Pipeline-Stages definiert sind. Um eine CI/CD-Pipeline in GitLab umzusetzen, braucht man eine \texttt{.gitlab-ci.yml} Datei im Root-Verzeichnis des Repository. Der Runner benutzt diese dann, um die darin definierten Schritte auszuführen. 
+
+In meiner Konfiguration habe ich den GitLab Runner ebenfalls über NixOS eingerichtet:
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{nix}
+    gitlab-runner = {
+      enable = true;
+      gracefulTermination = true;
+    };
+\end{minted}
+Der GitLab Runner ist so konfiguriert, dass er zuverlässig startet und sich bei Bedarf sicher beendet. Er wird mit dem GitLab-Server verbunden, um die CI/CD-Jobs auszuführen, die in den GitLab-Projekten definiert sind. Sobald ein Push in das Repository erfolgt, stößt GitLab den Runner an, der dann die definierten Stages (wie Build, Test und Deployment) ausführt. Der Runner arbeitet dabei unabhängig mit isolierten Docker-Containern.
+
+Der GitLab Runner muss manuell bei der GitLab-Instanz registriert werden, um die Verbindung herzustellen. Dies erfolgt über den Befehl \texttt{gitlab-runner register}, bei dem der Runner mit einer spezifischen URL und einem Registrierungstoken aus der GitLab-Instanz verknüpft wird. Dadurch wird sichergestellt, dass der Runner in der CI/CD-Pipeline verfügbar ist und die definierten Jobs ausführen kann. Prinzipiell besteht allerdings auch die Möglichkeit, diesen Runner ebenfalls via Nix als Teil der Gitlab Instanz aufzusetzen, ohne manuelle Schritte tätigen zu müssen.
+
+\subsection{Docker}
+In meiner CI/CD-Pipeline setze ich mehrere Docker-Images ein, speziell für das Projekts erstellt wurden. Die Containerisierung stellt sicher, dass die Anwendungen in einer isolierten Umgebung laufen, was sowohl die Wartbarkeit als auch die Skalierbarkeit verbessert.
+
+\paragraph*{PMX-Dockerfile}
+Für das PMX-Image verwende ich das \texttt{eclipse-temurin:11}-Image, das eine optimierte Java-Laufzeitumgebung bietet. Der Inhalt des Repositorys wird in den Container kopiert, und das \texttt{entrypoint.sh}-Skript wird ausführbar gemacht, damit der Container beim Start korrekt arbeiten kann. Diese einfache Konfiguration ermöglicht die Ausführung der PMX-Analyse in einer konsistenten Umgebung und wurde erstellt von meinem Betreuer Sebastian Weber. 
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{dockerfile}
+FROM	eclipse-temurin:11
+
+COPY	.	.
+RUN	chmod +x entrypoint.sh
+\end{minted}
+
+\paragraph*{Palladio-Dockerfile}
+Das Palladio-Image basiert auf einem bestehenden Image von Thomas Weber \cite{thomas}, das ich angepasst habe. Ich habe unnötige Skripte entfernt und die Experimentdaten sowie das adaptierte Automatisierungsskript \texttt{RunExperimentAutomation.sh} in das Image kopiert. 
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{dockerfile}
+FROM	thomasweber/palladioexperimentautomation
+
+RUN	rm -f /usr/*.sh
+COPY	ExperimentData/	/usr/ExperimentData/
+COPY	RunExperimentAutomation.sh	/usr/RunExperimentAutomation.sh
+RUN	chmod +x /usr/RunExperimentAutomation.sh
+\end{minted}
+
+\paragraph*{Gnuplot-Dockerfile}
+Für die Visualisierung der Analyseergebnisse habe ich ein Image basierend auf Alpine Linux erstellt, das Gnuplot und die nötigen Schriftarten installiert. Das Skript \texttt{plot.sh}, das die Diagramme erzeugt, wird ebenfalls in den Container kopiert und ausführbar gemacht. Durch die Verwendung von Alpine als Basisimage bleibt das Image sehr schlank, was die Ausführung in der Pipeline beschleunigt.
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{dockerfile}
+FROM alpine:latest
+
+RUN apk add --no-cache gnuplot fontconfig ttf-dejavu
+
+COPY plot.sh .
+RUN chmod +x plot.sh
+\end{minted}
+
+Diese Docker-Images bilden die Grundlage der CI/CD-Pipeline und sorgen dafür, dass die Analyse und Simulation in isolierten, reproduzierbaren Umgebungen ausgeführt werden können.
+
+\section{Implementierung der CI/CD Pipeline}
+ 
+Die Software, die für die Performability-Analyse genutzt wird, ist bereits am Forschungszentrum Informatik (FZI) im Einsatz. Dort wird GitLab als zentrale Plattform für Versionskontrolle und CI/CD verwendet. Allerdings erfordert der Zugriff auf diese GitLab-Instanz spezielle Mitarbeiterrechte und eine VPN-Verbindung, die mir nicht zur Verfügung standen. Um dennoch mit ähnlichen Voraussetzungen arbeiten zu können, musste ich eine eigene Serverumgebung einrichten und die Gegebenheiten des FZI, insbesondere die GitLab-Umgebung, reproduzieren.
+
+Ein wesentlicher Bestandteil dieser Reproduktion war das Einrichten einer eigenen Docker-Registry, wie sie auch am FZI genutzt wird. Das Aufsetzen der Docker-Registry erfolgte ohne Hilfestellung durch den Betreuer. 
+Die GitLab CI/CD-Pipeline ist in drei Stages unterteilt: extract, simulate und plot. Jede Stage verwendet ein eigenes Docker-Image, das ich zuvor erstellt und in meine Docker-Registry hochgeladen habe. Die Konfiguration der Pipeline erfolgt in der \texttt{gitlab-ci.yaml}-Datei, die den Ablauf und die Abhängigkeiten der einzelnen Schritte definiert.
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{yaml}
+stages:
+  - extract
+  - simulate
+  - plot
+\end{minted}
+
+\paragraph*{Extract-Stage}
+In dieser Stage wird das PMX-Image verwendet. Das Skript in dieser Stage extrahiert die notwendigen Daten und speichert sie in einem Verzeichnis namens \texttt{results/}, das als Artefakt für die nächsten Schritte verfügbar gemacht wird. Das Docker-Image für diese Stage ist in der Registry hinterlegt:
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{yaml}
+pmx:
+  image: "registry.dumustbereitsein.de/vincenzo/pmx:latest"
+  stage: extract
+  script:
+    - /entrypoint.sh
+  artifacts:
+    paths:
+      - results/
+\end{minted}
+
+\paragraph*{Simulate-Stage}
+Die Simulation erfolgt in dieser Stage mit dem Palladio-Image. Hier werden die extrahierten Dateien aus der vorherigen Stage verwendet, und IDs in den Modelldateien werden durch neue Werte ersetzt. Die alten IDs müssen überschrieben werden, da diese in \texttt{Generated.experiments} und \texttt{measuring2.monitorrepository} referenziert werden. \texttt{Generated.experiments} und \texttt{measuring2.monitorrepository} sind hard-coded im Docker Image. Wenn man diese IDs dort nicht überschreibt, Palladio sucht nach Dateien die nicht existieren. Die neuen IDs kommen aus den im ersten Schritt durch PMX generierten Dateien, die auf den Eingabetraces beruhen. 
+
+Der Simulator SimuLizar des Palladio Ansatzes wird mit den Modellen als Eingabe ausgeführt. Die Ergebnisse werden als Artefakte in einem Ordner \texttt{result/} gespeichert:
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{yaml}
+palladio:
+  image: "registry.dumustbereitsein.de/vincenzo/palladio_runtime:latest"
+  stage: simulate
+  dependencies:
+    - pmx
+  script:
+    # Step 1: Copy extracted files from results/ to /usr/ExperimentData/model/
+    - cp results/extracted.* /usr/ExperimentData/model/
+    - cp results/measuring2.* /usr/ExperimentData/model/
+
+    # Step 2: Extract the new IDs and replace them in Generated.experiments and other files
+    - new_allocation_id=$(sed -n '2s/.*id="\([^"]*\)".*/\1/p' \
+    /usr/ExperimentData/model/extracted.allocation)
+    - new_monitor_id=$(sed -n '2s/.*id="\([^"]*\)".*/\1/p' \
+    /usr/ExperimentData/model/measuring2.monitorrepository)
+
+    # Update Generated.experiments
+    - sed -i "15s/#.*/#$new_allocation_id\"\/>/" \
+    /usr/ExperimentData/model/Experiments/Generated.experiments
+    - sed -i "16s/#.*/#$new_monitor_id\"\/>/" \
+    /usr/ExperimentData/model/Experiments/Generated.experiments
+    # Update measuring2.monitorrepository
+    - sed -i '12s/href="measuring\./href="measuring2\./' \
+    /usr/ExperimentData/model/measuring2.monitorrepository
+    - sed -i '19s/href="measuring\./href="measuring2\./' \
+    /usr/ExperimentData/model/measuring2.monitorrepository
+
+    # Step 3: Execute the container's main script
+    - /usr/RunExperimentAutomation.sh
+
+    - mv /result/ ./result/
+  artifacts:
+    paths:
+      - result/
+\end{minted}
+
+\paragraph*{Plot-Stage}
+In der letzten Stage wird das Gnuplot-Image verwendet, um die Ergebnisse der Simulation grafisch darzustellen. Das Skript generiert Diagramme, die als Artefakte im Verzeichnis \texttt{plots/} als .png gespeichert werden:
+
+\begin{minted}[frame=lines, framesep=2mm, fontsize=\small, linenos, breaklines]{yaml}
+gnuplot:
+  image: "registry.dumustbereitsein.de/vincenzo/gnuplot:latest"
+  stage: plot
+  dependencies:
+    - palladio
+  script:
+    - /plot.sh
+  artifacts:
+    paths:
+      - plots/*.png
+\end{minted}
+
+Jede dieser Stages ist klar voneinander getrennt und nutzt die bereitgestellten Artefakte der vorhergehenden Stages. Dies sorgt für eine modulare und leicht wartbare CI/CD-Pipeline, die flexibel an unterschiedliche Anforderungen angepasst werden kann.
+

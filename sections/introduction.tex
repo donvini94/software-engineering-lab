@@ -1,0 +1,23 @@
+%% LaTeX2e class for seminar theses
+%% sections/content.tex
+%% 
+%% Karlsruhe Institute of Technology
+%% Institute for Program Structures and Data Organization
+%% Chair for Software Design and Quality (SDQ)
+%%
+%% Dr.-Ing. Erik Burger
+%% burger@kit.edu
+
+\section{Einleitung}
+Performability-Analysen sind Methoden, die sowohl die Leistungsfähigkeit als auch die Zuverlässigkeit von Systemen bewerten. Sie ermöglichen es uns zu verstehen, wie ein System unter verschiedenen Bedingungen arbeitet, einschließlich normaler Betriebszustände und potenzieller Fehler oder Ausfälle. Diese Analysen sind entscheidend, weil sie uns helfen, vorherzusagen, wie sich ein System in realen Umgebungen verhält. Durch das Verständnis dieses Verhaltens können wir Systeme entwerfen und optimieren, die nicht nur effizient, sondern auch robust und zuverlässig sind.
+
+Warum ist das wichtig? In der heutigen Zeit sind Systeme oft komplex und müssen hohen Anforderungen gerecht werden. Indem wir Performability-Analysen durchführen, können wir Schwachstellen identifizieren, bevor sie zu echten Problemen werden. Das bedeutet, wir können proaktiv handeln, anstatt nur auf auftretende Fehler zu reagieren. So stellen wir sicher, dass das System unter verschiedenen Lasten und Bedingungen stabil bleibt.
+
+Eine wesentliche Grundlage für diese Analysen sind Laufzeitdaten wie Traces und Metriken. Traces sind detaillierte Aufzeichnungen der Abläufe innerhalb eines Systems, während Metriken quantitative Messungen wie Antwortzeiten oder Ressourcenauslastung darstellen. Diese Daten werden von einem laufenden System gesammelt und liefern wertvolle Einblicke in dessen aktuelles Verhalten. Mit diesen Informationen können wir Modelle erstellen oder Simulationen durchführen, um zu prognostizieren, wie sich das System unter veränderten Bedingungen verhalten würde—beispielsweise bei höherer Benutzerlast oder bei Ausfall bestimmter Komponenten.
+
+Um solche Analysen effektiv und kontinuierlich durchführen zu können, benötigen wir eine umfangreiche Software-Infrastruktur. Hier kommt die Automatisierung ins Spiel. Prozesse wie das Sammeln von Daten, deren Verarbeitung und die Durchführung der Analysen müssen nahtlos und ohne manuelles Eingreifen ablaufen. Eine CI/CD-Pipeline (Continuous Integration/Continuous Deployment) ist dafür die ideale Lösung. Sie automatisiert die Integration neuer Daten und die Bereitstellung der Analyseprozesse. Durch den Einsatz einer CI/CD-Pipeline können wir sicherstellen, dass unsere Performability-Analysen stets aktuell sind und schnell auf Veränderungen reagieren.
+
+Zusammengefasst helfen uns Performability-Analysen dabei, das Verhalten eines Systems unter verschiedenen Bedingungen vorherzusagen. Sie sind ein unverzichtbares Werkzeug, um Systeme zu entwickeln, die sowohl leistungsfähig als auch zuverlässig sind. Durch den Einsatz automatisierter Prozesse können wir diese Analysen effizienter gestalten und bessere Einblicke gewinnen, was letztlich zu robusteren und effizienteren Systemen führt.
+
+Die Hauptaufgabe dieses Projekts bestand darin, eine CI/CD-Pipeline zu entwickeln, die es ermöglicht, Performability-Modelle kontinuierlich zu generieren und zu analysieren. Für diese Generierung und Analyse werden der Performance Model eXtractor von der Uni Würzburg \cite{pmx} und der Palladio Simulator vom KIT \cite{palladio} verwendet. Der Fokus lag auf der Integration dieser Software in die Pipeline, um eine automatisierte, kontinuierliche Analyse zu ermöglichen. Dazu musste ich zuerst die Umgebung des FZI für mich replizieren, um damit arbeiten zu können. 
+
